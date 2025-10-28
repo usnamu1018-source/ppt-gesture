@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>Fist → PowerPoint Control</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { font-family: Arial; text-align: center; background: #111; color: #fff; }
+    video { display: none; }
+    #status { margin-top: 20px; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <h2>👊 주먹을 쥐면 PowerPoint 슬라이드 넘기기</h2>
+  <p>PowerPoint를 전체화면(F5)으로 띄우고, 이 페이지를 켜두세요.</p>
+  <div id="status">모델 로딩 중...</div>
+  <video id="webcam" autoplay playsinline width="320" height="240"></video>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.0.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  <script>
+  const MODEL_PATH = 'model/';
+  const FIST_CLASS = 'first';
+  const PROB_THRESHOLD = 0.85;
+  const COOLDOWN_MS = 1500;
+  let model, webcam, lastTrigger = 0;
+  const statusEl = document.getElementById('status');
+
+async function init() {
+  statusEl.textContent = '모델 로드 중...';
+  model = await tmImage.load(MODEL_PATH + 'model.json', MODEL_PATH + 'metadata.json');
+  webcam = new tmImage.Webcam(320, 240, true);
+  await webcam.setup();
+  await webcam.play();
+  document.getElementById('webcam').appendChild(webcam.canvas);
+  statusEl.textContent = '준비 완료. 주먹을 쥐어보세요.';
+  window.requestAnimationFrame(loop);
+}
+
+  async function loop() {
+    webcam.update();
+    await predict();
+    window.requestAnimationFrame(loop);
+  }
+
+  async function predict() {
+    const predictions = await model.predict(webcam.canvas);
+    const fistProb = predictions.find(p => p.className.toLowerCase() === FIST_CLASS).probability;
+    statusEl.textContent = `주먹 확률: ${(fistProb*100).toFixed(1)}%`;
+    const now = Date.now();
+    if (fistProb > PROB_THRESHOLD && (now - lastTrigger) > COOLDOWN_MS) {
+      lastTrigger = now;
+      statusEl.textContent = "👉 다음 슬라이드!";
+      fetch('http://localhost:5000/next', { method: 'POST' });
+    }
+  }
+
+  init();
+  </script>
+</body>
+</html>
+
